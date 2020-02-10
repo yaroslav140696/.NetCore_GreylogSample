@@ -1,0 +1,68 @@
+version: '3'
+
+services:
+  mongodb:
+    image: mongo:4.1
+    container_name: mongodb
+    restart: always
+    volumes:
+      - mongodata:/data/db:rw
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.2
+    container_name: elasticsearch
+    restart: always
+    environment:
+      - http.host=0.0.0.0
+      - transport.host=localhost
+      - network.host=0.0.0.0
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata1:/usr/share/elasticsearch/data:rw
+
+  graylog:
+    image: graylog/graylog:3.1
+    container_name: graylog
+    restart: always
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=somepassword12345678
+      # Password: admin
+      - GRAYLOG_ROOT_PASSWORD_SHA2=8c859ecfc4aba92b67a6b0b768551a5143fdadbcb193fbc30133b8f3002ad4bf
+      - GRAYLOG_HTTP_EXTERNAL_URI=http://127.0.0.1:9000/
+    links:
+      - mongodb:mongo
+      - elasticsearch
+    depends_on:
+      - mongodb
+      - elasticsearch
+    ports:
+      # HTTP
+      - 9000:9000
+      # Syslog TCP
+      - 1514:1514
+      # Syslog UDP
+      - 1514:1514/udp
+      # GELF TCP
+      - 12201:12201
+      # GELF UDP
+      - 12201:12201/udp
+
+  logspout:
+    image: gliderlabs/logspout:latest
+    container_name: logspout
+    restart: always
+    volumes:
+      - /etc/hostname:/etc/host_hostname:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      multiline+syslog://graylog:1514
+
+volumes:
+  esdata1:
+    driver: local
+  mongodata:
+    driver: local
